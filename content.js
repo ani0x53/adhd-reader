@@ -274,23 +274,17 @@
   // ═══════════════════════════════════════════
 
   // ═══════════════════════════════════════════
-  // 5. Text Reformatter
+  // 5. Text Reformatter (local, no API needed)
   // ═══════════════════════════════════════════
   let selectedRange = null;
 
-  document.addEventListener('mouseup', async (e) => {
+  document.addEventListener('mouseup', (e) => {
     if (!state.reformatter) {
       reformatBtn.style.display = 'none';
       return;
     }
 
     if (e.target.closest('#adhd-reformat-btn')) return;
-
-    const { apiKey } = await chrome.storage.sync.get('apiKey');
-    if (!apiKey) {
-      reformatBtn.style.display = 'none';
-      return;
-    }
 
     const selection = window.getSelection();
     const text = selection?.toString().trim();
@@ -308,63 +302,42 @@
     reformatBtn.style.display = 'block';
   });
 
-  reformatBtn.addEventListener('click', async (e) => {
+  reformatBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
 
     if (!selectedRange) return;
 
     const originalText = selectedRange.toString();
-    reformatBtn.textContent = 'Simplifying...';
-    reformatBtn.classList.add('loading');
+    const simplified = simplifyText(originalText);
+    insertReformattedText(selectedRange, simplified);
 
-    try {
-      const { apiKey } = await chrome.storage.sync.get('apiKey');
-      if (!apiKey) {
-        alert('Please set your Claude API key in the extension popup.');
-        return;
-      }
-
-      const simplified = await callClaude(apiKey, originalText);
-      insertReformattedText(selectedRange, simplified);
-    } catch (err) {
-      alert('Reformatting failed: ' + err.message);
-    } finally {
-      reformatBtn.style.display = 'none';
-      reformatBtn.textContent = 'Simplify Text';
-      reformatBtn.classList.remove('loading');
-      selectedRange = null;
-    }
+    reformatBtn.style.display = 'none';
+    selectedRange = null;
   });
 
-  async function callClaude(apiKey, text) {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: `Rewrite the following text to be easier to read for someone with ADHD. Break it into shorter sentences and use bullet points where appropriate. Return ONLY the reformatted text as clean HTML (use <p>, <ul>, <li> tags). Do not include any preamble or explanation.\n\nText:\n${text}`,
-          },
-        ],
-      }),
-    });
+  function simplifyText(text) {
+    // Split into sentences on . ! ? followed by space or end
+    const sentences = text
+      .split(/(?<=[.!?])\s+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
 
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API error ${response.status}`);
+    if (sentences.length <= 1) {
+      // Single long sentence — break on commas/semicolons into bullets
+      const parts = text
+        .split(/[,;]\s*/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+      if (parts.length > 1) {
+        return '<ul>' + parts.map(p => `<li>${p}</li>`).join('') + '</ul>';
+      }
+      return `<p>${text}</p>`;
     }
 
-    const data = await response.json();
-    return data.content[0].text;
+    // Multiple sentences — one bullet per sentence
+    return '<ul>' + sentences.map(s => `<li>${s}</li>`).join('') + '</ul>';
   }
 
   function insertReformattedText(range, html) {

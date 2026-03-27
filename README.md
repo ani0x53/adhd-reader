@@ -8,7 +8,7 @@ A Chrome extension that makes reading on the web easier for people with ADHD.
 - **Line Focus Mode** — Dims everything except the line near your cursor, reducing visual overwhelm
 - **Sentence Highlighter** — Click any sentence to highlight it yellow; click again to remove
 - **Reading Ruler** — A colored horizontal line follows your cursor down the page (color customizable)
-- **Text Reformatter** — Select text and click "Simplify Text" to break it into shorter sentences and bullet points using Claude AI
+- **Text Reformatter** — Select text and click "Simplify Text" to break it into shorter sentences and bullet points (no API needed)
 
 ## Install
 
@@ -17,14 +17,6 @@ A Chrome extension that makes reading on the web easier for people with ADHD.
 3. Enable **Developer mode** (top right toggle)
 4. Click **Load unpacked**
 5. Select the `adhd-reader` folder
-
-## Text Reformatter Setup
-
-The Text Reformatter feature uses the Claude API. To set it up:
-
-1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
-2. Click the extension icon in your toolbar
-3. Paste your API key in the field at the bottom and click **Save Key**
 
 ## Usage
 

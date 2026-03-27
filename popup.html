@@ -106,53 +106,6 @@
       background: none;
     }
 
-    .api-section {
-      margin-top: 12px;
-      padding-top: 12px;
-      border-top: 1px solid #2a2a4a;
-    }
-
-    .api-section label {
-      font-size: 11px;
-      color: #888;
-      display: block;
-      margin-bottom: 4px;
-    }
-
-    .api-section input[type="password"] {
-      width: 100%;
-      padding: 6px 8px;
-      font-size: 12px;
-      background: #2a2a4a;
-      border: 1px solid #3a3a5a;
-      border-radius: 4px;
-      color: #e0e0e0;
-      outline: none;
-    }
-
-    .api-section input[type="password"]:focus {
-      border-color: #6c5ce7;
-    }
-
-    .save-btn {
-      margin-top: 6px;
-      padding: 4px 12px;
-      font-size: 11px;
-      background: #6c5ce7;
-      color: #fff;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    .save-btn:hover { background: #5a4bd1; }
-
-    .status {
-      font-size: 11px;
-      color: #4ecdc4;
-      margin-top: 4px;
-      display: none;
-    }
   </style>
 </head>
 <body>
@@ -209,19 +162,12 @@
   <div class="feature">
     <div class="feature-info">
       <span class="feature-name">Text Reformatter</span>
-      <span class="feature-desc">Select text → simplify (requires API key below)</span>
+      <span class="feature-desc">Select text → break into bullet points</span>
     </div>
     <label class="toggle">
       <input type="checkbox" id="reformatter">
       <span class="slider"></span>
     </label>
-  </div>
-
-  <div class="api-section">
-    <label>Claude API Key (optional — only needed for Text Reformatter)</label>
-    <input type="password" id="apiKey" placeholder="sk-ant-...">
-    <button class="save-btn" id="saveKey">Save Key</button>
-    <div class="status" id="keyStatus">Key saved!</div>
   </div>
 
   <script src="popup.js"></script>
