@@ -1,4 +1,4 @@
-const FEATURES = ['fingerReading', 'lineFocus', 'bionic'];
+const FEATURES = ['fingerReading', 'lineReading', 'lineFocus', 'bionic'];
 const SETTINGS = ['fingerWords', 'lineWidth', 'bionicColor', 'bionicWeight'];
 
 document.addEventListener('DOMContentLoaded', async () => {

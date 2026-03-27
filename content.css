@@ -23,6 +23,16 @@
   -webkit-box-decoration-break: clone;
 }
 
+/* Line Reading highlight */
+.adhd-line-highlight {
+  background: #000 !important;
+  color: #fff !important;
+  border-radius: 2px;
+  padding: 2px 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 /* Bionic Reading */
 .adhd-bionic-bold {
   font-weight: 900;

@@ -12,6 +12,13 @@ Click any word to start, then use arrow keys to move through text. A black highl
 - **Click** any word to reposition
 - **Configurable:** Number of highlighted words (1–10, default 4)
 
+### Line Reading
+Like Finger Reading, but highlights an entire line of text at once. Great for reading paragraph-heavy content line by line.
+
+- **↑** / **↓** — Move to previous/next line
+- **Click** any line to start from there
+- Auto-scrolls as you move through the page
+
 ### Line Focus
 Dims the entire page except a narrow band around the line you're reading. Reduces visual overwhelm on dense pages.
 
@@ -40,18 +47,18 @@ Click the extension icon to open the popup. Toggle features on/off and adjust se
 
 ### Keyboard shortcuts
 
-| Key | Finger Reading | Line Focus |
-|-----|---------------|------------|
-| ← | Previous words | — |
-| → | Next words | — |
-| ↑ | Jump up ~1 line | Move focus up |
-| ↓ | Jump down ~1 line | Move focus down |
-| Click | Set reading position | — |
+| Key | Finger Reading | Line Reading | Line Focus |
+|-----|---------------|-------------|------------|
+| ← | Previous words | — | — |
+| → | Next words | — | — |
+| ↑ | Jump up ~1 line | Previous line | Move focus up |
+| ↓ | Jump down ~1 line | Next line | Move focus down |
+| Click | Set word position | Set line position | — |
 
 ## Known Limitations
 
-- **Google Docs** — Google Docs renders text on a `<canvas>` element (pixels, not HTML), so Finger Reading and Bionic Reading cannot access the document text. Line Focus works with mouse only (Google Docs captures keyboard events).
-- **Workaround for Google Docs** — Go to **File → Download as → Web page (.html)**, then open the downloaded HTML file in Chrome. All three features work fully on the downloaded file.
+- **Google Docs** — Google Docs renders text on a `<canvas>` element (pixels, not HTML), so Finger Reading, Line Reading, and Bionic Reading cannot access the document text. Line Focus works with mouse only (Google Docs captures keyboard events).
+- **Workaround for Google Docs** — Go to **File → Download as → Web page (.html)**, then open the downloaded HTML file in Chrome. All four features work fully on the downloaded file.
 - **Input fields** — Arrow keys are not captured when you're focused on a text input or textarea, so typing is not affected.
 - **Canvas-rendered sites** — Any site that renders text as canvas/images (some PDF viewers, design tools) will have the same limitation as Google Docs.
 
@@ -59,7 +66,8 @@ Click the extension icon to open the popup. Toggle features on/off and adjust se
 
 The extension injects a content script into every page that:
 - Walks the DOM tree to find text nodes
-- Wraps target words in `<span>` elements for highlighting (Finger Reading, Bionic Reading)
+- Wraps target words in `<span>` elements for highlighting (Finger Reading, Line Reading, Bionic Reading)
+- Groups words by screen position to detect visual lines (Line Reading)
 - Adds fixed-position overlay `<div>` elements for dimming (Line Focus)
 - Listens for mouse and keyboard events to update positions
 
@@ -76,8 +84,8 @@ No data leaves your browser. No external APIs. No tracking.
 Contributions are welcome! Feel free to open issues or submit pull requests.
 
 Ideas for contributions:
-- Customizable highlight colors for Finger Reading
-- Speed/auto-advance mode for Finger Reading
+- Customizable highlight colors for Finger Reading and Line Reading
+- Speed/auto-advance mode for Finger Reading and Line Reading
 - Firefox/Safari port
 - Chrome Web Store listing
 

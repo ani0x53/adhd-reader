@@ -3,6 +3,7 @@
 
   const state = {
     fingerReading: false,
+    lineReading: false,
     lineFocus: false,
     bionic: false,
   };
@@ -25,9 +26,10 @@
 
   // ── Load saved state ──
   chrome.storage.sync.get(
-    ['fingerReading', 'lineFocus', 'bionic', 'fingerWords', 'lineWidth', 'bionicColor', 'bionicWeight'],
+    ['fingerReading', 'lineReading', 'lineFocus', 'bionic', 'fingerWords', 'lineWidth', 'bionicColor', 'bionicWeight'],
     (stored) => {
       if (stored.fingerReading !== undefined) state.fingerReading = stored.fingerReading;
+      if (stored.lineReading !== undefined) state.lineReading = stored.lineReading;
       if (stored.lineFocus !== undefined) state.lineFocus = stored.lineFocus;
       if (stored.bionic !== undefined) state.bionic = stored.bionic;
       if (stored.fingerWords !== undefined) settings.fingerWords = stored.fingerWords;
@@ -54,6 +56,14 @@
       if (msg.feature === 'fingerReading' && !msg.enabled) {
         clearHighlight();
         words = [];
+      }
+      if (msg.feature === 'lineReading' && !msg.enabled) {
+        clearLineHighlight();
+        lines = [];
+      }
+      if (msg.feature === 'lineReading' && msg.enabled) {
+        buildLines();
+        if (lines.length > 0) highlightLine();
       }
       if (msg.feature === 'bionic') {
         msg.enabled ? enableBionic() : disableBionic();
@@ -188,10 +198,161 @@
     highlight();
   });
 
+  // ═══════════════════════════════════════════
+  // Line Reading
+  // ═══════════════════════════════════════════
+  let lines = []; // array of arrays of word objects
+  let lineIndex = 0;
+  let lineHighlightSpans = [];
+
+  function buildLines() {
+    lines = [];
+    lineIndex = 0;
+
+    // Collect all words with their screen positions
+    const allWords = [];
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          const p = node.parentElement;
+          if (!p) return NodeFilter.FILTER_REJECT;
+          if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(p.tagName))
+            return NodeFilter.FILTER_REJECT;
+          if (p.closest('.adhd-line-highlight, #adhd-line-focus-top, #adhd-line-focus-bottom'))
+            return NodeFilter.FILTER_REJECT;
+          if (node.textContent.trim().length === 0)
+            return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      }
+    );
+
+    let n;
+    while ((n = walker.nextNode())) {
+      const re = /\S+/g;
+      let m;
+      while ((m = re.exec(n.textContent)) !== null) {
+        // Get the Y position of this word
+        const range = document.createRange();
+        range.setStart(n, m.index);
+        range.setEnd(n, m.index + m[0].length);
+        const rect = range.getBoundingClientRect();
+        if (rect.height === 0) continue;
+
+        allWords.push({
+          node: n,
+          start: m.index,
+          end: m.index + m[0].length,
+          y: Math.round(rect.top + window.scrollY),
+        });
+      }
+    }
+
+    if (allWords.length === 0) return;
+
+    // Group words into lines by Y position (within 5px tolerance)
+    allWords.sort((a, b) => a.y - b.y);
+    let currentLine = [allWords[0]];
+    let currentY = allWords[0].y;
+
+    for (let i = 1; i < allWords.length; i++) {
+      if (Math.abs(allWords[i].y - currentY) <= 5) {
+        currentLine.push(allWords[i]);
+      } else {
+        lines.push(currentLine);
+        currentLine = [allWords[i]];
+        currentY = allWords[i].y;
+      }
+    }
+    lines.push(currentLine);
+  }
+
+  function clearLineHighlight() {
+    for (const s of lineHighlightSpans) {
+      if (s.parentNode) {
+        s.replaceWith(document.createTextNode(s.textContent));
+      }
+    }
+    lineHighlightSpans = [];
+    document.body.normalize();
+  }
+
+  function highlightLine() {
+    if (lines.length === 0) return;
+    lineIndex = Math.max(0, Math.min(lineIndex, lines.length - 1));
+
+    const lineWords = lines[lineIndex];
+    const spans = [];
+
+    // Process in reverse to keep offsets valid
+    for (let i = lineWords.length - 1; i >= 0; i--) {
+      const w = lineWords[i];
+      if (!w.node.parentNode) continue;
+      const len = w.node.textContent.length;
+      if (w.start >= len) continue;
+
+      try {
+        const range = document.createRange();
+        range.setStart(w.node, w.start);
+        range.setEnd(w.node, Math.min(w.end, len));
+        const span = document.createElement('span');
+        span.className = 'adhd-line-highlight';
+        range.surroundContents(span);
+        spans.push(span);
+      } catch {}
+    }
+
+    lineHighlightSpans = spans;
+
+    if (spans.length > 0) {
+      const el = spans[spans.length - 1];
+      const rect = el.getBoundingClientRect();
+      if (rect.top < 50 || rect.bottom > window.innerHeight - 50) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+  }
+
+  function refreshLineHighlight() {
+    clearLineHighlight();
+    const saved = lineIndex;
+    buildLines();
+    lineIndex = saved;
+    highlightLine();
+  }
+
+  // Click to set line position
+  document.addEventListener('click', (e) => {
+    if (!state.lineReading) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    clearLineHighlight();
+    buildLines();
+    if (lines.length === 0) return;
+
+    // Find the line closest to the click Y
+    const clickY = e.clientY + window.scrollY;
+    let closest = 0;
+    let closestDist = Infinity;
+    for (let i = 0; i < lines.length; i++) {
+      const dist = Math.abs(lines[i][0].y - clickY);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closest = i;
+      }
+    }
+
+    lineIndex = closest;
+    highlightLine();
+  });
+
   // Keyboard (capture phase)
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+    // Finger reading (← → ↑ ↓)
     if (state.fingerReading && words.length > 0) {
       const chunk = settings.fingerWords;
       let handled = true;
@@ -216,6 +377,24 @@
       }
     }
 
+    // Line reading (↑ ↓)
+    if (state.lineReading && lines.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        lineIndex = Math.min(lineIndex + 1, lines.length - 1);
+        refreshLineHighlight();
+        return;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        lineIndex = Math.max(lineIndex - 1, 0);
+        refreshLineHighlight();
+        return;
+      }
+    }
+
+    // Line focus (↑ ↓)
     if (state.lineFocus) {
       const step = settings.lineWidth;
       if (e.key === 'ArrowDown') {
