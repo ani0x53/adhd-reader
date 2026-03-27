@@ -278,7 +278,7 @@
   // ═══════════════════════════════════════════
   let selectedRange = null;
 
-  document.addEventListener('mouseup', (e) => {
+  document.addEventListener('mouseup', async (e) => {
     if (!state.reformatter) {
       reformatBtn.style.display = 'none';
       return;
