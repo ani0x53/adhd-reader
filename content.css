@@ -1,0 +1,86 @@
+/* Reading Ruler */
+#adhd-reading-ruler {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #3b82f6;
+  pointer-events: none;
+  z-index: 2147483647;
+  display: none;
+  transition: top 0.05s linear;
+}
+
+/* Line Focus overlay */
+#adhd-line-focus-top,
+#adhd-line-focus-bottom {
+  position: fixed;
+  left: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  z-index: 2147483646;
+  display: none;
+  transition: top 0.05s linear, height 0.05s linear;
+}
+
+#adhd-line-focus-top { top: 0; }
+
+/* Sentence Highlighter */
+.adhd-sentence-highlight {
+  background-color: #fef08a !important;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+/* Bionic Reading */
+.adhd-bionic b {
+  font-weight: 700;
+}
+
+/* Reformatter button */
+#adhd-reformat-btn {
+  position: fixed;
+  display: none;
+  z-index: 2147483647;
+  padding: 6px 14px;
+  background: #6c5ce7;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  white-space: nowrap;
+}
+
+#adhd-reformat-btn:hover {
+  background: #5a4bd1;
+}
+
+#adhd-reformat-btn.loading {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Reformatted output styling */
+.adhd-reformatted {
+  background: #f0f0ff;
+  border-left: 3px solid #6c5ce7;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin: 4px 0;
+  font-size: inherit;
+  line-height: 1.6;
+  color: #1a1a2e;
+}
+
+.adhd-reformatted ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.adhd-reformatted li {
+  margin: 4px 0;
+}
