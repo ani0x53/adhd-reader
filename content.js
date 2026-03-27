@@ -1,19 +1,20 @@
 (() => {
-  // ── State ──
+  if (window.innerWidth < 100 || window.innerHeight < 100) return;
+
   const state = {
-    bionic: false,
+    fingerReading: false,
     lineFocus: false,
-    sentenceHighlight: false,
-    readingRuler: false,
-    reformatter: false,
-    rulerColor: '#3b82f6',
+    bionic: false,
   };
 
-  // ── DOM elements created once ──
-  const ruler = document.createElement('div');
-  ruler.id = 'adhd-reading-ruler';
-  document.documentElement.appendChild(ruler);
+  const settings = {
+    fingerWords: 4,
+    lineWidth: 28,
+    bionicColor: '#000000',
+    bionicWeight: '900',
+  };
 
+  // ── Line Focus DOM ──
   const focusTop = document.createElement('div');
   focusTop.id = 'adhd-line-focus-top';
   document.documentElement.appendChild(focusTop);
@@ -22,19 +23,23 @@
   focusBottom.id = 'adhd-line-focus-bottom';
   document.documentElement.appendChild(focusBottom);
 
-  const reformatBtn = document.createElement('button');
-  reformatBtn.id = 'adhd-reformat-btn';
-  reformatBtn.textContent = 'Simplify Text';
-  document.documentElement.appendChild(reformatBtn);
-
   // ── Load saved state ──
   chrome.storage.sync.get(
-    ['bionic', 'lineFocus', 'sentenceHighlight', 'readingRuler', 'reformatter', 'rulerColor'],
+    ['fingerReading', 'lineFocus', 'bionic', 'fingerWords', 'lineWidth', 'bionicColor', 'bionicWeight'],
     (stored) => {
-      for (const key of Object.keys(state)) {
-        if (stored[key] !== undefined) state[key] = stored[key];
+      if (stored.fingerReading !== undefined) state.fingerReading = stored.fingerReading;
+      if (stored.lineFocus !== undefined) state.lineFocus = stored.lineFocus;
+      if (stored.bionic !== undefined) state.bionic = stored.bionic;
+      if (stored.fingerWords !== undefined) settings.fingerWords = stored.fingerWords;
+      if (stored.lineWidth !== undefined) settings.lineWidth = stored.lineWidth;
+      if (stored.bionicColor !== undefined) settings.bionicColor = stored.bionicColor;
+      if (stored.bionicWeight !== undefined) settings.bionicWeight = stored.bionicWeight;
+
+      if (state.lineFocus) {
+        focusTop.style.display = 'block';
+        focusBottom.style.display = 'block';
       }
-      applyAll();
+      if (state.bionic) enableBionic();
     }
   );
 
@@ -42,45 +47,226 @@
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'toggle') {
       state[msg.feature] = msg.enabled;
-      applyFeature(msg.feature);
-    } else if (msg.type === 'rulerColor') {
-      state.rulerColor = msg.color;
-      ruler.style.background = msg.color;
+      if (msg.feature === 'lineFocus') {
+        focusTop.style.display = msg.enabled ? 'block' : 'none';
+        focusBottom.style.display = msg.enabled ? 'block' : 'none';
+      }
+      if (msg.feature === 'fingerReading' && !msg.enabled) {
+        clearHighlight();
+        words = [];
+      }
+      if (msg.feature === 'bionic') {
+        msg.enabled ? enableBionic() : disableBionic();
+      }
+    }
+    if (msg.type === 'setting') {
+      settings[msg.key] = msg.value;
+      if (msg.key === 'bionicColor' || msg.key === 'bionicWeight') {
+        if (state.bionic) {
+          updateBionicStyle();
+        }
+      }
     }
   });
 
-  function applyAll() {
-    for (const feature of Object.keys(state)) {
-      if (feature !== 'rulerColor') applyFeature(feature);
+  // ═══════════════════════════════════════════
+  // Finger Reading
+  // ═══════════════════════════════════════════
+  let words = [];
+  let wordIndex = 0;
+  let highlightSpans = [];
+
+  function collectWords() {
+    const result = [];
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          const p = node.parentElement;
+          if (!p) return NodeFilter.FILTER_REJECT;
+          if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT'].includes(p.tagName))
+            return NodeFilter.FILTER_REJECT;
+          if (p.closest('.adhd-finger-highlight, #adhd-line-focus-top, #adhd-line-focus-bottom'))
+            return NodeFilter.FILTER_REJECT;
+          if (node.textContent.trim().length === 0)
+            return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      }
+    );
+
+    let n;
+    while ((n = walker.nextNode())) {
+      const re = /\S+/g;
+      let m;
+      while ((m = re.exec(n.textContent)) !== null) {
+        result.push({ node: n, start: m.index, end: m.index + m[0].length });
+      }
     }
-    ruler.style.background = state.rulerColor;
+    return result;
   }
 
-  function applyFeature(feature) {
-    switch (feature) {
-      case 'bionic':
-        state.bionic ? enableBionic() : disableBionic();
-        break;
-      case 'lineFocus':
-        focusTop.style.display = state.lineFocus ? 'block' : 'none';
-        focusBottom.style.display = state.lineFocus ? 'block' : 'none';
-        break;
-      case 'sentenceHighlight':
-        // Just toggling — click handler checks state
-        break;
-      case 'readingRuler':
-        ruler.style.display = state.readingRuler ? 'block' : 'none';
-        break;
-      case 'reformatter':
-        // Just toggling — selection handler checks state
-        break;
+  function clearHighlight() {
+    for (const s of highlightSpans) {
+      if (s.parentNode) {
+        s.replaceWith(document.createTextNode(s.textContent));
+      }
+    }
+    highlightSpans = [];
+    document.body.normalize();
+  }
+
+  function highlight() {
+    if (words.length === 0) return;
+    wordIndex = Math.max(0, Math.min(wordIndex, words.length - 1));
+
+    const chunk = settings.fingerWords;
+    const from = wordIndex;
+    const to = Math.min(from + chunk, words.length);
+    const spans = [];
+
+    for (let i = to - 1; i >= from; i--) {
+      const w = words[i];
+      if (!w.node.parentNode) continue;
+      const len = w.node.textContent.length;
+      if (w.start >= len) continue;
+
+      try {
+        const range = document.createRange();
+        range.setStart(w.node, w.start);
+        range.setEnd(w.node, Math.min(w.end, len));
+        const span = document.createElement('span');
+        span.className = 'adhd-finger-highlight';
+        range.surroundContents(span);
+        spans.push(span);
+      } catch {}
+    }
+
+    highlightSpans = spans;
+
+    if (spans.length > 0) {
+      const el = spans[spans.length - 1];
+      const rect = el.getBoundingClientRect();
+      if (rect.top < 50 || rect.bottom > window.innerHeight - 50) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
     }
   }
 
+  function refreshAndHighlight() {
+    clearHighlight();
+    const saved = wordIndex;
+    words = collectWords();
+    wordIndex = saved;
+    highlight();
+  }
+
+  // Click to start
+  document.addEventListener('click', (e) => {
+    if (!state.fingerReading) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    clearHighlight();
+    words = collectWords();
+    if (words.length === 0) return;
+
+    const caret = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+    if (caret && caret.startContainer.nodeType === Node.TEXT_NODE) {
+      const node = caret.startContainer;
+      const offset = caret.startOffset;
+      for (let i = 0; i < words.length; i++) {
+        if (words[i].node === node && offset >= words[i].start && offset <= words[i].end) {
+          wordIndex = i;
+          highlight();
+          return;
+        }
+      }
+    }
+
+    wordIndex = 0;
+    highlight();
+  });
+
+  // Keyboard (capture phase)
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (state.fingerReading && words.length > 0) {
+      const chunk = settings.fingerWords;
+      let handled = true;
+
+      if (e.key === 'ArrowRight') {
+        wordIndex = Math.min(wordIndex + chunk, words.length - 1);
+      } else if (e.key === 'ArrowLeft') {
+        wordIndex = Math.max(wordIndex - chunk, 0);
+      } else if (e.key === 'ArrowDown') {
+        wordIndex = Math.min(wordIndex + 15, words.length - 1);
+      } else if (e.key === 'ArrowUp') {
+        wordIndex = Math.max(wordIndex - 15, 0);
+      } else {
+        handled = false;
+      }
+
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
+        refreshAndHighlight();
+        return;
+      }
+    }
+
+    if (state.lineFocus) {
+      const step = settings.lineWidth;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        e.stopPropagation();
+        focusY = Math.min(window.innerHeight, focusY + step);
+        updateFocusPosition();
+        if (focusY > window.innerHeight * 0.7) {
+          window.scrollBy(0, step);
+          focusY -= step * 0.5;
+          updateFocusPosition();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        focusY = Math.max(0, focusY - step);
+        updateFocusPosition();
+        if (focusY < window.innerHeight * 0.3) {
+          window.scrollBy(0, -step);
+          focusY += step * 0.5;
+          updateFocusPosition();
+        }
+      }
+    }
+  }, true);
+
   // ═══════════════════════════════════════════
-  // 1. Bionic Reading
+  // Line Focus
   // ═══════════════════════════════════════════
-  const BIONIC_ATTR = 'data-adhd-bionic-original';
+  let focusY = window.innerHeight / 2;
+
+  function updateFocusPosition() {
+    const half = settings.lineWidth / 2;
+    const top = Math.max(0, focusY - half);
+    const bottom = focusY + half;
+    focusTop.style.height = top + 'px';
+    focusBottom.style.top = bottom + 'px';
+    focusBottom.style.height = (window.innerHeight - bottom) + 'px';
+  }
+
+  document.addEventListener('mousemove', (e) => {
+    if (state.lineFocus) {
+      focusY = e.clientY;
+      updateFocusPosition();
+    }
+  });
+
+  // ═══════════════════════════════════════════
+  // Bionic Reading
+  // ═══════════════════════════════════════════
+  const BIONIC_ATTR = 'data-adhd-bionic';
 
   function enableBionic() {
     const walker = document.createTreeWalker(
@@ -88,12 +274,11 @@
       NodeFilter.SHOW_TEXT,
       {
         acceptNode(node) {
-          const parent = node.parentElement;
-          if (!parent) return NodeFilter.FILTER_REJECT;
-          const tag = parent.tagName;
-          if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'CODE', 'PRE'].includes(tag))
+          const p = node.parentElement;
+          if (!p) return NodeFilter.FILTER_REJECT;
+          if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA', 'INPUT', 'CODE', 'PRE'].includes(p.tagName))
             return NodeFilter.FILTER_REJECT;
-          if (parent.closest('#adhd-reformat-btn, #adhd-reading-ruler, #adhd-line-focus-top, #adhd-line-focus-bottom'))
+          if (p.closest(`[${BIONIC_ATTR}], #adhd-line-focus-top, #adhd-line-focus-bottom, .adhd-finger-highlight`))
             return NodeFilter.FILTER_REJECT;
           if (node.textContent.trim().length === 0)
             return NodeFilter.FILTER_REJECT;
@@ -106,30 +291,30 @@
     while (walker.nextNode()) textNodes.push(walker.currentNode);
 
     for (const textNode of textNodes) {
-      // Skip if already processed
-      if (textNode.parentElement?.closest(`[${BIONIC_ATTR}]`)) continue;
-
       const text = textNode.textContent;
       if (!text.trim()) continue;
 
       const span = document.createElement('span');
-      span.classList.add('adhd-bionic');
       span.setAttribute(BIONIC_ATTR, '');
 
-      const words = text.split(/(\s+)/);
-      for (const word of words) {
-        if (/^\s+$/.test(word) || word.length <= 1) {
-          span.appendChild(document.createTextNode(word));
+      const parts = text.split(/(\s+)/);
+      for (const part of parts) {
+        if (/^\s+$/.test(part) || part.length <= 1) {
+          span.appendChild(document.createTextNode(part));
           continue;
         }
-        // Bold first half for short words, first ~40% for longer words
-        const boldLen = word.length <= 3 ? Math.ceil(word.length / 2) : Math.ceil(word.length * 0.4);
-        const b = document.createElement('b');
-        b.textContent = word.slice(0, boldLen);
+        const boldLen = part.length <= 3 ? Math.ceil(part.length / 2) : Math.ceil(part.length * 0.4);
+
+        const b = document.createElement('span');
+        b.className = 'adhd-bionic-bold';
+        b.style.fontWeight = settings.bionicWeight;
+        b.style.color = settings.bionicColor;
+        b.textContent = part.slice(0, boldLen);
         span.appendChild(b);
+
         const rest = document.createElement('span');
         rest.style.fontWeight = 'normal';
-        rest.textContent = word.slice(boldLen);
+        rest.textContent = part.slice(boldLen);
         span.appendChild(rest);
       }
 
@@ -141,213 +326,13 @@
     for (const el of document.querySelectorAll(`[${BIONIC_ATTR}]`)) {
       el.replaceWith(document.createTextNode(el.textContent));
     }
+    document.body.normalize();
   }
 
-  // ═══════════════════════════════════════════
-  // 2. Line Focus Mode + Reading Ruler position
-  // ═══════════════════════════════════════════
-  const LINE_HEIGHT = 40;
-  const ARROW_STEP = 40;
-  let focusY = window.innerHeight / 2;
-
-  function updateFocusPosition(y) {
-    focusY = y;
-
-    if (state.readingRuler) {
-      ruler.style.top = y + 'px';
+  function updateBionicStyle() {
+    for (const el of document.querySelectorAll('.adhd-bionic-bold')) {
+      el.style.fontWeight = settings.bionicWeight;
+      el.style.color = settings.bionicColor;
     }
-
-    if (state.lineFocus) {
-      const top = Math.max(0, y - LINE_HEIGHT / 2);
-      const bottom = y + LINE_HEIGHT / 2;
-      focusTop.style.height = top + 'px';
-      focusBottom.style.top = bottom + 'px';
-      focusBottom.style.height = (window.innerHeight - bottom) + 'px';
-    }
-  }
-
-  document.addEventListener('mousemove', (e) => {
-    if (state.readingRuler || state.lineFocus) {
-      updateFocusPosition(e.clientY);
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (!state.lineFocus && !state.readingRuler) return;
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      updateFocusPosition(Math.min(window.innerHeight, focusY + ARROW_STEP));
-      // Scroll page when focus reaches lower third
-      if (focusY > window.innerHeight * 0.7) {
-        window.scrollBy(0, ARROW_STEP);
-        focusY -= ARROW_STEP * 0.5;
-        updateFocusPosition(focusY);
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      updateFocusPosition(Math.max(0, focusY - ARROW_STEP));
-      // Scroll page when focus reaches upper third
-      if (focusY < window.innerHeight * 0.3) {
-        window.scrollBy(0, -ARROW_STEP);
-        focusY += ARROW_STEP * 0.5;
-        updateFocusPosition(focusY);
-      }
-    }
-  });
-
-  // ═══════════════════════════════════════════
-  // 3. Sentence Highlighter
-  // ═══════════════════════════════════════════
-  document.addEventListener('click', (e) => {
-    if (!state.sentenceHighlight) return;
-    if (e.target.closest('#adhd-reformat-btn')) return;
-
-    // If clicking an already-highlighted sentence, remove highlight
-    const highlighted = e.target.closest('.adhd-sentence-highlight');
-    if (highlighted) {
-      const text = highlighted.textContent;
-      highlighted.replaceWith(document.createTextNode(text));
-      return;
-    }
-
-    // Find the sentence at click position
-    const range = getWordRangeAtPoint(e.clientX, e.clientY);
-    if (!range) return;
-
-    const sentenceRange = expandToSentence(range);
-    if (!sentenceRange) return;
-
-    const span = document.createElement('span');
-    span.classList.add('adhd-sentence-highlight');
-
-    try {
-      sentenceRange.surroundContents(span);
-    } catch {
-      // surroundContents fails across element boundaries — wrap extracted content instead
-      const frag = sentenceRange.extractContents();
-      span.appendChild(frag);
-      sentenceRange.insertNode(span);
-    }
-  });
-
-  function getWordRangeAtPoint(x, y) {
-    if (document.caretRangeFromPoint) {
-      return document.caretRangeFromPoint(x, y);
-    }
-    if (document.caretPositionFromPoint) {
-      const pos = document.caretPositionFromPoint(x, y);
-      if (!pos) return null;
-      const r = document.createRange();
-      r.setStart(pos.offsetNode, pos.offset);
-      r.collapse(true);
-      return r;
-    }
-    return null;
-  }
-
-  function expandToSentence(range) {
-    const node = range.startContainer;
-    if (node.nodeType !== Node.TEXT_NODE) return null;
-
-    const text = node.textContent;
-    const offset = range.startOffset;
-
-    // Find sentence boundaries
-    let start = offset;
-    while (start > 0 && !/[.!?]\s/.test(text.slice(start - 1, start + 1))) start--;
-    if (start > 0) start++; // skip past the space after the period
-
-    let end = offset;
-    while (end < text.length && !/[.!?]/.test(text[end])) end++;
-    if (end < text.length) end++; // include the period
-
-    const sentenceRange = document.createRange();
-    sentenceRange.setStart(node, start);
-    sentenceRange.setEnd(node, end);
-    return sentenceRange;
-  }
-
-  // ═══════════════════════════════════════════
-  // 4. Reading Ruler (handled in mousemove above)
-  // ═══════════════════════════════════════════
-
-  // ═══════════════════════════════════════════
-  // 5. Text Reformatter (local, no API needed)
-  // ═══════════════════════════════════════════
-  let selectedRange = null;
-
-  document.addEventListener('mouseup', (e) => {
-    if (!state.reformatter) {
-      reformatBtn.style.display = 'none';
-      return;
-    }
-
-    if (e.target.closest('#adhd-reformat-btn')) return;
-
-    const selection = window.getSelection();
-    const text = selection?.toString().trim();
-
-    if (!text || text.length < 20) {
-      reformatBtn.style.display = 'none';
-      return;
-    }
-
-    selectedRange = selection.getRangeAt(0).cloneRange();
-
-    const rect = selectedRange.getBoundingClientRect();
-    reformatBtn.style.top = (rect.bottom + window.scrollY + 6) + 'px';
-    reformatBtn.style.left = (rect.left + window.scrollX) + 'px';
-    reformatBtn.style.display = 'block';
-  });
-
-  reformatBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!selectedRange) return;
-
-    const originalText = selectedRange.toString();
-    const simplified = simplifyText(originalText);
-    insertReformattedText(selectedRange, simplified);
-
-    reformatBtn.style.display = 'none';
-    selectedRange = null;
-  });
-
-  function simplifyText(text) {
-    // Split into sentences on . ! ? followed by space or end
-    const sentences = text
-      .split(/(?<=[.!?])\s+/)
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    if (sentences.length <= 1) {
-      // Single long sentence — break on commas/semicolons into bullets
-      const parts = text
-        .split(/[,;]\s*/)
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
-
-      if (parts.length > 1) {
-        return '<ul>' + parts.map(p => `<li>${p}</li>`).join('') + '</ul>';
-      }
-      return `<p>${text}</p>`;
-    }
-
-    // Multiple sentences — one bullet per sentence
-    return '<ul>' + sentences.map(s => `<li>${s}</li>`).join('') + '</ul>';
-  }
-
-  function insertReformattedText(range, html) {
-    const container = document.createElement('div');
-    container.classList.add('adhd-reformatted');
-    container.innerHTML = html;
-
-    range.deleteContents();
-    range.insertNode(container);
-
-    window.getSelection().removeAllRanges();
   }
 })();

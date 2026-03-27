@@ -21,14 +21,17 @@
     }
 
     .feature {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
       padding: 10px 0;
       border-bottom: 1px solid #2a2a4a;
     }
 
     .feature:last-child { border-bottom: none; }
+
+    .feature-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
 
     .feature-info {
       display: flex;
@@ -85,89 +88,128 @@
       transform: translateX(18px);
     }
 
-    .settings-row {
+    .settings {
+      margin-top: 8px;
       display: flex;
-      align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
-      margin-top: 6px;
+      align-items: center;
     }
 
-    .settings-row label {
+    .setting {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .setting label {
       font-size: 11px;
       color: #888;
     }
 
-    .settings-row input[type="color"] {
-      width: 24px;
-      height: 24px;
+    .setting input[type="range"] {
+      width: 80px;
+      height: 4px;
+      accent-color: #6c5ce7;
+    }
+
+    .setting input[type="color"] {
+      width: 22px;
+      height: 22px;
       border: none;
       border-radius: 4px;
       cursor: pointer;
       background: none;
+      padding: 0;
     }
 
+    .setting .val {
+      font-size: 11px;
+      color: #6c5ce7;
+      min-width: 16px;
+      text-align: center;
+    }
+
+    .setting select {
+      font-size: 11px;
+      background: #2a2a4a;
+      color: #e0e0e0;
+      border: 1px solid #3a3a5a;
+      border-radius: 4px;
+      padding: 2px 4px;
+      outline: none;
+    }
   </style>
 </head>
 <body>
   <h1>ADHD Reading Assistant</h1>
 
   <div class="feature">
-    <div class="feature-info">
-      <span class="feature-name">Bionic Reading</span>
-      <span class="feature-desc">Bold first letters of words</span>
+    <div class="feature-header">
+      <div class="feature-info">
+        <span class="feature-name">Finger Reading</span>
+        <span class="feature-desc">Click a word, then ← → ↑ ↓ to read</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="fingerReading">
+        <span class="slider"></span>
+      </label>
     </div>
-    <label class="toggle">
-      <input type="checkbox" id="bionic">
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <div class="feature">
-    <div class="feature-info">
-      <span class="feature-name">Line Focus</span>
-      <span class="feature-desc">Dim everything except current line</span>
-    </div>
-    <label class="toggle">
-      <input type="checkbox" id="lineFocus">
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <div class="feature">
-    <div class="feature-info">
-      <span class="feature-name">Sentence Highlighter</span>
-      <span class="feature-desc">Click sentences to highlight</span>
-    </div>
-    <label class="toggle">
-      <input type="checkbox" id="sentenceHighlight">
-      <span class="slider"></span>
-    </label>
-  </div>
-
-  <div class="feature">
-    <div class="feature-info">
-      <span class="feature-name">Reading Ruler</span>
-      <span class="feature-desc">Horizontal line follows cursor</span>
-      <div class="settings-row">
-        <label>Color:</label>
-        <input type="color" id="rulerColor" value="#3b82f6">
+    <div class="settings">
+      <div class="setting">
+        <label>Words:</label>
+        <input type="range" id="fingerWords" min="1" max="10" value="4">
+        <span class="val" id="fingerWordsVal">4</span>
       </div>
     </div>
-    <label class="toggle">
-      <input type="checkbox" id="readingRuler">
-      <span class="slider"></span>
-    </label>
   </div>
 
   <div class="feature">
-    <div class="feature-info">
-      <span class="feature-name">Text Reformatter</span>
-      <span class="feature-desc">Select text → break into bullet points</span>
+    <div class="feature-header">
+      <div class="feature-info">
+        <span class="feature-name">Line Focus</span>
+        <span class="feature-desc">Dims everything except current line</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="lineFocus">
+        <span class="slider"></span>
+      </label>
     </div>
-    <label class="toggle">
-      <input type="checkbox" id="reformatter">
-      <span class="slider"></span>
-    </label>
+    <div class="settings">
+      <div class="setting">
+        <label>Width:</label>
+        <input type="range" id="lineWidth" min="10" max="80" value="28">
+        <span class="val" id="lineWidthVal">28</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="feature">
+    <div class="feature-header">
+      <div class="feature-info">
+        <span class="feature-name">Bionic Reading</span>
+        <span class="feature-desc">Bold first letters of every word</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="bionic">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="settings">
+      <div class="setting">
+        <label>Color:</label>
+        <input type="color" id="bionicColor" value="#000000">
+      </div>
+      <div class="setting">
+        <label>Weight:</label>
+        <select id="bionicWeight">
+          <option value="600">Semi-bold</option>
+          <option value="700">Bold</option>
+          <option value="800">Extra-bold</option>
+          <option value="900" selected>Black</option>
+        </select>
+      </div>
+    </div>
   </div>
 
   <script src="popup.js"></script>

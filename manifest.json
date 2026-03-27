@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ADHD Reading Assistant",
   "version": "1.0.0",
-  "description": "Bionic reading, line focus, sentence highlighting, reading ruler, and text reformatting for easier reading.",
+  "description": "Finger reading, line focus, and bionic reading to make web reading easier for people with ADHD.",
   "permissions": ["activeTab", "storage"],
   "action": {
     "default_popup": "popup.html",
@@ -16,7 +16,8 @@
     {
       "matches": ["<all_urls>"],
       "css": ["content.css"],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "all_frames": true
     }
   ],
   "icons": {
