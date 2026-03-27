@@ -106,25 +106,31 @@
     while (walker.nextNode()) textNodes.push(walker.currentNode);
 
     for (const textNode of textNodes) {
-      const parent = textNode.parentElement;
-      if (parent.hasAttribute(BIONIC_ATTR)) continue;
+      // Skip if already processed
+      if (textNode.parentElement?.closest(`[${BIONIC_ATTR}]`)) continue;
 
       const text = textNode.textContent;
+      if (!text.trim()) continue;
+
       const span = document.createElement('span');
       span.classList.add('adhd-bionic');
       span.setAttribute(BIONIC_ATTR, '');
 
       const words = text.split(/(\s+)/);
       for (const word of words) {
-        if (/^\s+$/.test(word)) {
+        if (/^\s+$/.test(word) || word.length <= 1) {
           span.appendChild(document.createTextNode(word));
           continue;
         }
+        // Bold first half for short words, first ~40% for longer words
         const boldLen = word.length <= 3 ? Math.ceil(word.length / 2) : Math.ceil(word.length * 0.4);
         const b = document.createElement('b');
         b.textContent = word.slice(0, boldLen);
         span.appendChild(b);
-        span.appendChild(document.createTextNode(word.slice(boldLen)));
+        const rest = document.createElement('span');
+        rest.style.fontWeight = 'normal';
+        rest.textContent = word.slice(boldLen);
+        span.appendChild(rest);
       }
 
       textNode.replaceWith(span);
@@ -138,21 +144,56 @@
   }
 
   // ═══════════════════════════════════════════
-  // 2. Line Focus Mode
+  // 2. Line Focus Mode + Reading Ruler position
   // ═══════════════════════════════════════════
   const LINE_HEIGHT = 40;
+  const ARROW_STEP = 40;
+  let focusY = window.innerHeight / 2;
 
-  document.addEventListener('mousemove', (e) => {
+  function updateFocusPosition(y) {
+    focusY = y;
+
     if (state.readingRuler) {
-      ruler.style.top = e.clientY + 'px';
+      ruler.style.top = y + 'px';
     }
 
     if (state.lineFocus) {
-      const top = Math.max(0, e.clientY - LINE_HEIGHT / 2);
-      const bottom = e.clientY + LINE_HEIGHT / 2;
+      const top = Math.max(0, y - LINE_HEIGHT / 2);
+      const bottom = y + LINE_HEIGHT / 2;
       focusTop.style.height = top + 'px';
       focusBottom.style.top = bottom + 'px';
       focusBottom.style.height = (window.innerHeight - bottom) + 'px';
+    }
+  }
+
+  document.addEventListener('mousemove', (e) => {
+    if (state.readingRuler || state.lineFocus) {
+      updateFocusPosition(e.clientY);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (!state.lineFocus && !state.readingRuler) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      updateFocusPosition(Math.min(window.innerHeight, focusY + ARROW_STEP));
+      // Scroll page when focus reaches lower third
+      if (focusY > window.innerHeight * 0.7) {
+        window.scrollBy(0, ARROW_STEP);
+        focusY -= ARROW_STEP * 0.5;
+        updateFocusPosition(focusY);
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      updateFocusPosition(Math.max(0, focusY - ARROW_STEP));
+      // Scroll page when focus reaches upper third
+      if (focusY < window.innerHeight * 0.3) {
+        window.scrollBy(0, -ARROW_STEP);
+        focusY += ARROW_STEP * 0.5;
+        updateFocusPosition(focusY);
+      }
     }
   });
 
@@ -244,6 +285,12 @@
     }
 
     if (e.target.closest('#adhd-reformat-btn')) return;
+
+    const { apiKey } = await chrome.storage.sync.get('apiKey');
+    if (!apiKey) {
+      reformatBtn.style.display = 'none';
+      return;
+    }
 
     const selection = window.getSelection();
     const text = selection?.toString().trim();

@@ -35,7 +35,8 @@
 
 /* Bionic Reading */
 .adhd-bionic b {
-  font-weight: 700;
+  font-weight: 900 !important;
+  color: inherit;
 }
 
 /* Reformatter button */
